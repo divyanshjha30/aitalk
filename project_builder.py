@@ -27,7 +27,6 @@ Return ONLY the prompt string to use. Do NOT include markdown or explanation.
     return prompt_string.strip().replace('“', '"').replace('”', '"')
 
 def generate_prompt_for_file_content(description, filepath, previous_files):
-    # Generate one file at a time with context of previous files:
     context_str = ""
     for fpath, content in previous_files.items():
         context_str += f"\nFile: {fpath}\n---\n{content}\n---\n"
@@ -88,6 +87,33 @@ def extract_first_json_object(text):
                         start_idx = None
     return None
 
+def get_project_name_from_description(description):
+    name_prompt = f"""
+You are an assistant that creates short, meaningful, hyphenated names for React apps based on a project description.
+
+Return ONLY a short hyphenated name (lowercase, no spaces, no punctuation) for this project:
+\"\"\"{description}\"\"\"
+Example: "Admin dashboard with analytics and login" → "admin-dashboard"
+
+Return ONLY the hyphenated name, no explanations, no markdown.
+"""
+    name = call_groq(name_prompt, task_type="generate_project_name")
+    if not name:
+        return "react-app"
+    return re.sub(r"[^\w\-]", "", name.strip().lower())
+
+def get_unique_project_dir(base_name):
+    base_path = os.path.join(os.getcwd(), base_name)
+    if not os.path.exists(base_path):
+        return base_path
+
+    i = 1
+    while True:
+        new_path = f"{base_path}-{i}"
+        if not os.path.exists(new_path):
+            return new_path
+        i += 1
+
 def get_file_list(description):
     effective_prompt = generate_prompt_for_file_list(description)
     response = call_groq(effective_prompt, task_type="create_project")
@@ -122,8 +148,9 @@ def get_file_content_with_context(description, filepath, previous_files):
 
 def build_project(description):
     file_list = get_file_list(description)
-    project_name = os.path.basename(os.path.splitext(file_list[0])[0]) if file_list and file_list[0].endswith("package.json") else "react-app"
-    base_path = os.path.join(os.getcwd(), project_name)
+    project_name = get_project_name_from_description(description)
+    base_path = get_unique_project_dir(project_name)
+    print(f"📁 Creating project in: {base_path}")
     make_dir(base_path)
 
     # Sequential generation with context passing ONLY
