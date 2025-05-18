@@ -2,45 +2,68 @@ import sys
 import os
 import json
 import subprocess
+import re
 from system_utils import make_dir, write_file, run_command
-from llm_utils import call_llm
+from groq_client import call_groq  # Only use call_groq now
 
 def build_project(description, model="codellama"):
     prompt = f"""
-You are a project code generator. Based on this prompt: "{description}", 
-return ONLY a JSON with this structure:
+You are a project code generator. Based on this prompt: "{description}", return ONLY a JSON with this structure:
 
 {{
   "project_name": "todo-app",
   "files": [
     {{
       "path": "src/App.js",
-      "content": "import React from 'react'; ..."
+      "content": "..."
     }},
     {{
       "path": "src/index.js",
-      "content": "import ReactDOM from 'react-dom'; ..."
+      "content": "..."
     }},
     {{
       "path": "package.json",
-      "content": "{{\\n  \\"name\\": \\"todo-app\\", ... }}"
+      "content": "..."
+    }},
+    {{
+      "path": "README.md",
+      "content": "..."
     }}
   ]
 }}
+
+Requirements:
+- The todo app must use localStorage to persist todos across refreshes.
+- It must support adding, deleting, and toggling todos as complete/incomplete.
+- It should include basic error handling (e.g., prevent empty input).
+- It should include a README.md file describing how to run the project.
+- Use React best practices (hooks, folder structure if possible).
+- Do NOT include markdown formatting like triple backticks (```).
+- Use modern JavaScript (ES6+).
+- Use React 18 and the modern root API (createRoot).
+
+Only return raw JSON in your output. No explanations.
 """
-    response = call_llm(prompt, model=model)
+
+    response = call_groq(prompt, task_type="create_project")
     print("------ RAW RESPONSE ------")
     print(response)
     print("--------------------------")
 
-    # Try to extract JSON robustly
+    if not response:
+        print("❌ No response from Groq API. Aborting.")
+        sys.exit(1)
+
+    # Remove triple backticks and any leading/trailing whitespace
+    cleaned = response.strip()
+    if cleaned.startswith("```") and cleaned.endswith("```"):
+        cleaned = cleaned[3:-3].strip()
+
+    # Attempt to extract JSON
     try:
-        if '```' in response:
-            response = response.split('```')[1]
-        response = response.strip()
-        start = response.find('{')
-        end = response.rfind('}')
-        json_data = response[start:end+1]
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        json_data = cleaned[start:end+1]
         project = json.loads(json_data)
     except Exception as e:
         print("❌ Failed to parse JSON from LLM response.")
@@ -67,14 +90,15 @@ return ONLY a JSON with this structure:
     # Git Init and First Commit
     run_command(['git', 'init'], cwd=base_path)
     run_command(['git', 'add', '.'], cwd=base_path)
-    run_command(['git', 'commit', '-m', 'First Commit'], cwd=base_path)
+    run_command(['git', 'commit', '-m', 'Initial commit'], cwd=base_path)
 
-    # Technology-specific setup
+    # Node setup
     package_json_path = os.path.join(base_path, 'package.json')
     if os.path.exists(package_json_path):
         print("📦 Detected Node.js project, running npm install...")
         run_command(['npm', 'install'], cwd=base_path)
 
+    # Python setup if needed
     requirements_path = os.path.join(base_path, 'requirements.txt')
     if os.path.exists(requirements_path):
         print("🐍 Detected Python project, setting up virtual environment and installing requirements...")

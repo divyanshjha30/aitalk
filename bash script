@@ -1,26 +1,23 @@
 #!/bin/bash
 
 AITALK_PATH="$HOME/Desktop/linuxProjectAItalk/aitalk.py"
+VENV_PYTHON="$HOME/Desktop/linuxProjectAItalk/.venv/bin/python"
 
 # Dependency checks
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "❌ python3 not found in PATH."
-    exit 1
-fi
-
-if ! command -v ollama >/dev/null 2>&1; then
-    echo "❌ ollama not found in PATH."
+if [[ ! -x "$VENV_PYTHON" ]]; then
+    echo "❌ Python virtual environment not found or not set up at $VENV_PYTHON"
+    echo "Please run: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
     exit 1
 fi
 
 # --create-project
 if [[ "$1" == "--create-project" ]]; then
     shift
-    python3 "$AITALK_PATH" --create-project "$@"
+    "$VENV_PYTHON" "$AITALK_PATH" --create-project "$@"
 
 # --explain-X (where X can be any number)
 elif [[ "$1" =~ --explain-[0-9]+$ ]]; then
-    python3 "$AITALK_PATH" "$1" --model llama3:8b
+    "$VENV_PYTHON" "$AITALK_PATH" "$1"
 
 # --summarise "<prompt>" file.txt
 elif [[ "$1" == "--summarise" ]]; then
@@ -37,7 +34,7 @@ elif [[ "$1" == "--summarise" ]]; then
         exit 1
     fi
 
-    python3 "$AITALK_PATH" --summarise "$PROMPT" "$FILE"
+    "$VENV_PYTHON" "$AITALK_PATH" --summarise "$PROMPT" "$FILE"
 
 # Help
 elif [[ "$1" == "--help" ]]; then

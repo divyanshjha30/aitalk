@@ -1,7 +1,7 @@
 import os
 import getpass
 import re
-from llm_utils import call_llm
+from groq_client import call_groq
 
 def explain_last_n_commands_with_output(n, model="llama3:8b", log_path=os.path.expanduser('~/aitalk_session.log')):
     if not os.path.exists(log_path):
@@ -37,7 +37,7 @@ def explain_last_n_commands_with_output(n, model="llama3:8b", log_path=os.path.e
     session_snippet = "\n".join(blocks)
 
     prompt = f"""Explain step by step what is happening in these shell commands and their outputs:\n\n{session_snippet}"""
-    explanation = call_llm(prompt, model=model)
+    explanation = call_groq(prompt, task_type="explain_x")
     print("------ LLM Explanation ------")
     print(explanation)
     print("-----------------------------")
