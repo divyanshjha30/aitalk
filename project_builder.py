@@ -26,43 +26,8 @@ Return ONLY the prompt string to use. Do NOT include markdown or explanation.
         sys.exit(1)
     return prompt_string.strip().replace('“', '"').replace('”', '"')
 
-def generate_prompt_for_all_files_content(description, file_list, files_content_so_far):
-    """
-    Generates a prompt for the LLM to produce content for all files at once,
-    passing previously generated files as context.
-    files_content_so_far: dict of {filepath: content}
-    """
-    # Format already generated files for context
-    context_str = ""
-    for fpath, content in files_content_so_far.items():
-        context_str += f"\nFile: {fpath}\n---\n{content}\n---\n"
-
-    meta_prompt = f"""
-You are a highly capable LLM that generates a modern, production-ready React 18 app.
-
-Project Description:
-\"\"\"{description}\"\"\"
-
-You have already generated the following files with their full content:
-{context_str}
-
-Now, generate the full content of the remaining files exactly as specified in this file list:
-{json.dumps(file_list)}
-
-Output ONLY a JSON object where keys are file paths and values are their full file content as strings.
-
-Rules:
-- Do NOT include markdown or code fences.
-- Output valid JSON only.
-- Each file content must be complete and exactly what should be written to the file.
-- Make sure the files are consistent and reference each other properly.
-
-Return ONLY the JSON object as text.
-"""
-    return meta_prompt
-
 def generate_prompt_for_file_content(description, filepath, previous_files):
-    # If you want to generate one file at a time with context of previous files:
+    # Generate one file at a time with context of previous files:
     context_str = ""
     for fpath, content in previous_files.items():
         context_str += f"\nFile: {fpath}\n---\n{content}\n---\n"
@@ -88,7 +53,6 @@ RULES:
 Return ONLY the file content as plain text.
 """
     return meta_prompt
-
 
 # 🔧 Improved file list parser
 def extract_first_json_array(text):
@@ -124,7 +88,6 @@ def extract_first_json_object(text):
                         start_idx = None
     return None
 
-
 def get_file_list(description):
     effective_prompt = generate_prompt_for_file_list(description)
     response = call_groq(effective_prompt, task_type="create_project")
@@ -146,31 +109,6 @@ def get_file_list(description):
         print("Error:", e)
         sys.exit(1)
 
-
-def get_all_files_content(description, file_list):
-    """
-    Generate all files in one shot, passing the entire file list and any previously generated content.
-    Falls back to single file generation if needed.
-    """
-    # First, try one-shot generation for all files
-    prompt = generate_prompt_for_all_files_content(description, file_list, {})
-    response = call_groq(prompt, task_type="create_project")
-    if not response:
-        print("❌ Groq API did not return project files content. Trying sequential generation...")
-        return None
-
-    try:
-        files_content = json.loads(response)
-        if not isinstance(files_content, dict):
-            raise ValueError("Response is not a JSON object.")
-        # Check if all files are present
-        if not all(f in files_content for f in file_list):
-            raise ValueError("Not all files are present in response.")
-        return files_content
-    except Exception as e:
-        print(f"⚠️ Could not parse one-shot file content JSON or incomplete: {e}")
-        return None
-
 def get_file_content_with_context(description, filepath, previous_files):
     prompt = generate_prompt_for_file_content(description, filepath, previous_files)
     response = call_groq(prompt, task_type="create_project")
@@ -188,20 +126,13 @@ def build_project(description):
     base_path = os.path.join(os.getcwd(), project_name)
     make_dir(base_path)
 
-    # Try one-shot generation of all files
-    print("🧩 Attempting one-shot generation of all files...")
-    files_content = get_all_files_content(description, file_list)
-
-    if files_content is None:
-        # Fallback: generate files one by one passing previous files as context
-        print("🔄 Falling back to sequential generation with context passing...")
-        files_content = {}
-        for rel_path in file_list:
-            print(f"📝 Generating content for: {rel_path} with context of {len(files_content)} files")
-            content = get_file_content_with_context(description, rel_path, files_content)
-            files_content[rel_path] = content
-    else:
-        print("✅ One-shot generation successful.")
+    # Sequential generation with context passing ONLY
+    print("🔄 Starting sequential generation with context passing...")
+    files_content = {}
+    for rel_path in file_list:
+        print(f"📝 Generating content for: {rel_path} with context of {len(files_content)} files")
+        content = get_file_content_with_context(description, rel_path, files_content)
+        files_content[rel_path] = content
 
     # Write files to disk
     for rel_path, content in files_content.items():
@@ -214,6 +145,22 @@ def build_project(description):
             if json_content:
                 try:
                     parsed_json = json.loads(json_content)
+
+                    # Add browserslist only if not already present
+                    if "browserslist" not in parsed_json:
+                        parsed_json["browserslist"] = {
+                            "production": [
+                                ">0.2%",
+                                "not dead",
+                                "not op_mini all"
+                            ],
+                            "development": [
+                                "last 1 chrome version",
+                                "last 1 firefox version",
+                                "last 1 safari version"
+                            ]
+                        }
+
                     content = json.dumps(parsed_json, indent=2)
                 except Exception as e:
                     print(f"⚠️ Warning: Could not parse extracted package.json content: {e}")
@@ -223,6 +170,33 @@ def build_project(description):
         write_file(file_path, content)
 
     print("✅ Project created successfully.")
+
+    # ------------------------------
+    # Now run git init, npm install, npm run start
+    # ------------------------------
+
+    # Run `git init`
+    git_init_success = safe_run_command(["git", "init"], cwd=base_path)
+    if git_init_success:
+        # Make initial commit with message
+        safe_run_command(["git", "add", "."], cwd=base_path)
+        safe_run_command(["git", "commit", "-m", "Initial commit from our amazing kickass tool aitalk by Divyansh"], cwd=base_path)
+    else:
+        print("⚠️ git init failed, skipping git commit steps.")
+
+    # Run npm install
+    npm_install_success = safe_run_command(["npm", "install"], cwd=base_path)
+
+    # Run npm run start only if npm install succeeded
+    if npm_install_success:
+        print("🚀 Starting npm run start...")
+        try:
+            # Use subprocess.Popen so we can keep the server running (optional)
+            subprocess.Popen(["npm", "run", "start"], cwd=base_path)
+        except Exception as e:
+            print(f"❌ Failed to run npm start: {e}")
+    else:
+        print("❌ npm install failed. Skipping npm start.")
 
 # Utilities
 
