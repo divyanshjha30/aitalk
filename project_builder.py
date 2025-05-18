@@ -153,13 +153,30 @@ def build_project(description):
     print(f"📁 Creating project in: {base_path}")
     make_dir(base_path)
 
-    # Sequential generation with context passing ONLY
-    print("🔄 Starting sequential generation with context passing...")
+    # Save context of generated files
     files_content = {}
-    for rel_path in file_list:
+    failed_files = []
+
+    print("🔄 Starting sequential generation with context passing...")
+    i = 0
+    while i < len(file_list):
+        rel_path = file_list[i]
         print(f"📝 Generating content for: {rel_path} with context of {len(files_content)} files")
-        content = get_file_content_with_context(description, rel_path, files_content)
-        files_content[rel_path] = content
+
+        try:
+            content = get_file_content_with_context(description, rel_path, files_content)
+            files_content[rel_path] = content
+            i += 1  # Only advance index if successful
+        except Exception as e:
+            error_message = str(e)
+            if "rate_limit" in error_message.lower() or "429" in error_message:
+                print("⚠️ Rate limit hit. Waiting 5 seconds before retrying...")
+                time.sleep(5)
+                continue  # Retry same file
+            else:
+                print(f"❌ Failed to generate {rel_path}: {e}")
+                failed_files.append(rel_path)
+                i += 1  # Skip failed file and move on
 
     # Write files to disk
     for rel_path, content in files_content.items():
@@ -172,7 +189,6 @@ def build_project(description):
             if json_content:
                 try:
                     parsed_json = json.loads(json_content)
-
                     # Add browserslist only if not already present
                     if "browserslist" not in parsed_json:
                         parsed_json["browserslist"] = {
@@ -187,7 +203,6 @@ def build_project(description):
                                 "last 1 safari version"
                             ]
                         }
-
                     content = json.dumps(parsed_json, indent=2)
                 except Exception as e:
                     print(f"⚠️ Warning: Could not parse extracted package.json content: {e}")
@@ -196,7 +211,29 @@ def build_project(description):
 
         write_file(file_path, content)
 
-    print("✅ Project created successfully.")
+        # --- Inject react-scripts and start script if this is package.json ---
+        if rel_path == 'package.json':
+            package_path = file_path
+            try:
+                with open(package_path, 'r') as f:
+                    pkg = json.load(f)
+                scripts = pkg.setdefault('scripts', {})
+                dependencies = pkg.setdefault('dependencies', {})
+                if 'start' not in scripts:
+                    scripts['start'] = 'react-scripts start'
+                if 'react-scripts' not in dependencies:
+                    dependencies['react-scripts'] = '5.0.1'
+                with open(package_path, 'w') as f:
+                    json.dump(pkg, f, indent=2)
+            except Exception as e:
+                print(f"⚠️ Could not patch react-scripts/start script in package.json: {e}")
+
+    if failed_files:
+        print("⚠️ The following files failed to generate:")
+        for f in failed_files:
+            print(f" - {f}")
+    else:
+        print("✅ All files generated successfully.")
 
     # ------------------------------
     # Now run git init, npm install, npm run start
