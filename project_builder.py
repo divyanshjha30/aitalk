@@ -9,6 +9,8 @@ from groq_client import call_groq
 import json5
 import shutil
 import time
+import threading
+import pty
 
 # --- Meta-prompt generators ---
 
@@ -326,7 +328,7 @@ Make sure the new version fixes the issue and contains required dependencies for
 
                 if retry_success:
                     print("✅ npm install fixed and completed!")
-                    subprocess.Popen(["npm", "run", "start"], cwd=base_path)
+                    run_npm_start_with_auto_confirm(base_path)
                 else:
                     print("❌ npm install failed even after repair.")
             except Exception as e:
@@ -335,7 +337,40 @@ Make sure the new version fixes the issue and contains required dependencies for
             print("❌ Groq did not return a valid package.json.")
     else:
         print("✅ npm install succeeded. Starting project...")
-        subprocess.Popen(["npm", "run", "start"], cwd=base_path)
+        run_npm_start_with_auto_confirm(base_path)
+
+def run_npm_start_with_auto_confirm(cwd):
+    print("🚀 Running npm start...")
+
+    def read_and_respond(fd):
+        sent_yes = False
+        while True:
+            try:
+                output = os.read(fd, 1024).decode(errors="ignore")
+                if not output:
+                    break
+                print(output, end="")  # Print npm output to console
+
+                # Match the prompt more loosely
+                if (
+                    "would you like to run the app on another port" in output.lower()
+                    and not sent_yes
+                ):
+                    print("⚠️ Port 3000 is busy. Auto-confirming port change...")
+                    os.write(fd, b"Y\n")
+                    sent_yes = True
+            except OSError:
+                break
+
+    pid, fd = pty.fork()
+    if pid == 0:
+        # Child process
+        os.execvp("npm", ["npm", "start"])
+    else:
+        # Parent process
+        read_and_respond(fd)
+        os.close(fd)
+        print("✅ npm start completed.")
 
 # Utilities
 
