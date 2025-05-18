@@ -139,8 +139,7 @@ def get_file_content_with_context(description, filepath, previous_files):
     prompt = generate_prompt_for_file_content(description, filepath, previous_files)
     response = call_groq(prompt, task_type="create_project")
     if not response:
-        print(f"❌ Groq API did not return content for {filepath}. Check your API key, model, or network.")
-        sys.exit(1)
+        raise RuntimeError(f"Groq API did not return content for {filepath}.")
     cleaned = response.strip()
     cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
     cleaned = re.sub(r"```$", "", cleaned).strip()
@@ -163,20 +162,30 @@ def build_project(description):
         rel_path = file_list[i]
         print(f"📝 Generating content for: {rel_path} with context of {len(files_content)} files")
 
-        try:
-            content = get_file_content_with_context(description, rel_path, files_content)
-            files_content[rel_path] = content
-            i += 1  # Only advance index if successful
-        except Exception as e:
-            error_message = str(e)
-            if "rate_limit" in error_message.lower() or "429" in error_message:
-                print("⚠️ Rate limit hit. Waiting 5 seconds before retrying...")
-                time.sleep(5)
-                continue  # Retry same file
-            else:
-                print(f"❌ Failed to generate {rel_path}: {e}")
-                failed_files.append(rel_path)
-                i += 1  # Skip failed file and move on
+        retries = 0
+        max_retries = 5
+        while retries < max_retries:
+            try:
+                content = get_file_content_with_context(description, rel_path, files_content)
+                files_content[rel_path] = content
+                i += 1  # Only advance index if successful
+                break  # Success, move to next file
+            except Exception as e:
+                error_message = str(e).lower()
+                if "rate limit" in error_message or "429" in error_message:
+                    wait_time = 5 * (retries + 1)
+                    print(f"⚠️ Rate limit hit. Waiting {wait_time}s before retrying ({retries+1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    retries += 1
+                else:
+                    print(f"❌ Failed to generate {rel_path}: {e}")
+                    failed_files.append(rel_path)
+                    i += 1  # Skip failed file and move on
+                    break
+        else:
+            print(f"❌ Giving up on {rel_path} after {max_retries} retries.")
+            failed_files.append(rel_path)
+            i += 1
 
     # Write files to disk
     for rel_path, content in files_content.items():
