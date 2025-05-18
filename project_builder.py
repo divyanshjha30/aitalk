@@ -212,37 +212,112 @@ def build_project(description):
         print("⚠️ git init failed, skipping git commit steps.")
 
     # Run npm install
-    npm_install_success = safe_run_command(["npm", "install"], cwd=base_path)
+    npm_success, npm_output = safe_run_command(["npm", "install"], cwd=base_path, capture_output=True)
 
-    # Run npm run start only if npm install succeeded
-    if npm_install_success:
-        print("🚀 Starting npm run start...")
-        try:
-            # Use subprocess.Popen so we can keep the server running (optional)
-            subprocess.Popen(["npm", "run", "start"], cwd=base_path)
-        except Exception as e:
-            print(f"❌ Failed to run npm start: {e}")
+    if not npm_success:
+        print("❌ npm install failed. Attempting auto-repair via Groq...")
+
+        package_path = os.path.join(base_path, "package.json")
+        if not os.path.exists(package_path):
+            print("❌ No package.json found to repair.")
+            return
+
+        with open(package_path, "r") as f:
+            package_json_text = f.read()
+
+        all_files = {}
+        for root, dirs, files in os.walk(base_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, base_path)
+                try:
+                    with open(full_path, "r") as f:
+                        all_files[rel_path] = f.read()
+                except Exception:
+                    continue
+
+        repair_prompt = f"""
+You are an expert in fixing npm errors in React projects.
+
+The following `npm install` failed with this error:
+{npm_output[:5000]}
+
+Below is the current `package.json` file:
+{package_json_text}
+
+Please fix the `package.json` and return ONLY the fixed JSON (no explanation, no backticks, no markdown).
+
+Make sure the new version fixes the issue and contains required dependencies for a modern React 18 app.
+"""
+        fixed_package = call_groq(repair_prompt, task_type="fix_package_json")
+        cleaned_package = extract_first_json_object(fixed_package)
+        if cleaned_package:
+            try:
+                parsed_fixed = json.loads(cleaned_package)
+
+                # Inject browserslist again if needed
+                if "browserslist" not in parsed_fixed:
+                    parsed_fixed["browserslist"] = {
+                        "production": [
+                            ">0.2%",
+                            "not dead",
+                            "not op_mini all"
+                        ],
+                        "development": [
+                            "last 1 chrome version",
+                            "last 1 firefox version",
+                            "last 1 safari version"
+                        ]
+                    }
+
+                with open(package_path, "w") as f:
+                    json.dump(parsed_fixed, f, indent=2)
+
+                print("🔁 Replacing package.json and retrying npm install...")
+
+                clean_node_modules(base_path)
+                retry_success, _ = safe_run_command(["npm", "install"], cwd=base_path, capture_output=True)
+
+                if retry_success:
+                    print("✅ npm install fixed and completed!")
+                    subprocess.Popen(["npm", "run", "start"], cwd=base_path)
+                else:
+                    print("❌ npm install failed even after repair.")
+            except Exception as e:
+                print("❌ Could not parse repaired package.json:", e)
+        else:
+            print("❌ Groq did not return a valid package.json.")
     else:
-        print("❌ npm install failed. Skipping npm start.")
+        print("✅ npm install succeeded. Starting project...")
+        subprocess.Popen(["npm", "run", "start"], cwd=base_path)
 
 # Utilities
 
-def safe_run_command(cmd, cwd=None, max_retries=3):
+def safe_run_command(cmd, cwd=None, max_retries=3, capture_output=False):
     env = os.environ.copy()
     env["CI"] = "true"
     for attempt in range(1, max_retries + 1):
         try:
             print(f"🔄 Running command (attempt {attempt}): {' '.join(cmd)}")
-            subprocess.run(cmd, cwd=cwd, env=env, check=True)
-            return True
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                env=env,
+                check=True,
+                capture_output=capture_output,
+                text=True
+            )
+            return True if not capture_output else (True, result.stdout)
         except subprocess.CalledProcessError as e:
             print(f"⚠️ Command failed on attempt {attempt}: {e}")
+            if capture_output and e.stderr:
+                return False, e.stderr
             if attempt < max_retries:
                 print("⏳ Retrying after 5 seconds...")
                 time.sleep(5)
             else:
                 print("❌ Maximum retries reached. Giving up.")
-                return False
+                return False if not capture_output else (False, e.stderr or "")
 
 def clean_node_modules(base_path):
     node_modules_path = os.path.join(base_path, 'node_modules')
