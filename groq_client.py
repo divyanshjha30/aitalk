@@ -11,8 +11,9 @@ TASK_MODEL_MAP = {
     "explain_x": "meta-llama/llama-4-scout-17b-16e-instruct"
 }
 
-def call_groq(prompt, task_type="create_project", system_prompt="You are a helpful assistant."):
-    model = TASK_MODEL_MAP.get(task_type, "mixtral-8x7b-32768")
+def call_groq(prompt, task_type="create_project", system_prompt="You are a helpful assistant.", model=None):
+    if model is None:
+        model = TASK_MODEL_MAP.get(task_type, "meta-llama/llama-4-scout-17b-16e-instruct")
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",

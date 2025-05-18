@@ -1,7 +1,7 @@
 import os
 from groq_client import call_groq
 
-def summarise_file(prompt, file_path, model="mistral:7b"):
+def summarise_file(prompt, file_path):
     if not os.path.exists(file_path):
         print(f"❌ File not found: {file_path}")
         return

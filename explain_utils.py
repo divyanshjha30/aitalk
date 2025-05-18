@@ -3,7 +3,7 @@ import getpass
 import re
 from groq_client import call_groq
 
-def explain_last_n_commands_with_output(n, model="llama3:8b", log_path=os.path.expanduser('~/aitalk_session.log')):
+def explain_last_n_commands_with_output(n, log_path=os.path.expanduser('~/aitalk_session.log')):
     if not os.path.exists(log_path):
         print(f"❌ Log file not found: {log_path}")
         print("Tip: Start your terminal session with: script ~/aitalk_session.log")
