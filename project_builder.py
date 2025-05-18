@@ -4,7 +4,7 @@ import json
 import subprocess
 import re
 from system_utils import make_dir, write_file, run_command
-from groq_client import call_groq  # Only use call_groq now
+from groq_client import call_groq
 
 def build_project(description, model="codellama"):
     prompt = f"""
@@ -54,10 +54,10 @@ Only return raw JSON in your output. No explanations.
         print("❌ No response from Groq API. Aborting.")
         sys.exit(1)
 
-    # Remove triple backticks and any leading/trailing whitespace
+    # Remove triple backticks and any language hints
     cleaned = response.strip()
-    if cleaned.startswith("```") and cleaned.endswith("```"):
-        cleaned = cleaned[3:-3].strip()
+    cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+    cleaned = re.sub(r"```$", "", cleaned).strip()
 
     # Attempt to extract JSON
     try:
