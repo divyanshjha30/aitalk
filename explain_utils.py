@@ -1,22 +1,28 @@
 import os
 import getpass
+import re
 from llm_utils import call_llm
 
-def explain_last_n_commands_with_output(n, log_path=os.path.expanduser('~/aitalk_session.log')):
+def explain_last_n_commands_with_output(n, model="llama3:8b", log_path=os.path.expanduser('~/aitalk_session.log')):
     if not os.path.exists(log_path):
         print(f"❌ Log file not found: {log_path}")
-        print("Tip: Start your terminal session with: script -f ~/aitalk_session.log")
+        print("Tip: Start your terminal session with: script ~/aitalk_session.log")
         return
 
     with open(log_path, 'r') as f:
         lines = f.readlines()
 
-    # Heuristic: Find lines that look like prompts (e.g., start with your username, $, or %)
-    user = getpass.getuser()
-    prompt_prefixes = [f"{user}@", "$", "%"]
+    def strip_ansi(line):
+        ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+        return ansi_escape.sub('', line)
 
-    # Find indices of prompts
-    prompt_indices = [i for i, line in enumerate(lines) if any(line.lstrip().startswith(p) for p in prompt_prefixes)]
+    # Find indices of prompts (lines ending with $ or % after stripping ANSI codes)
+    prompt_indices = []
+    for i, line in enumerate(lines):
+        clean = strip_ansi(line).strip()
+        if clean.endswith('$') or clean.endswith('%'):
+            prompt_indices.append(i)
+
     if not prompt_indices:
         print("❌ Could not find any command prompts in the log.")
         return
@@ -31,7 +37,7 @@ def explain_last_n_commands_with_output(n, log_path=os.path.expanduser('~/aitalk
     session_snippet = "\n".join(blocks)
 
     prompt = f"""Explain step by step what is happening in these shell commands and their outputs:\n\n{session_snippet}"""
-    explanation = call_llm(prompt)
+    explanation = call_llm(prompt, model=model)
     print("------ LLM Explanation ------")
     print(explanation)
     print("-----------------------------")

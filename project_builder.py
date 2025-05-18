@@ -5,7 +5,7 @@ import subprocess
 from system_utils import make_dir, write_file, run_command
 from llm_utils import call_llm
 
-def build_project(description):
+def build_project(description, model="codellama"):
     prompt = f"""
 You are a project code generator. Based on this prompt: "{description}", 
 return ONLY a JSON with this structure:
@@ -28,7 +28,7 @@ return ONLY a JSON with this structure:
   ]
 }}
 """
-    response = call_llm(prompt)
+    response = call_llm(prompt, model=model)
     print("------ RAW RESPONSE ------")
     print(response)
     print("--------------------------")
