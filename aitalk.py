@@ -3,6 +3,7 @@ import re
 from project_builder import build_project
 from explain_utils import explain_last_n_commands_with_output
 from summarise_utils import summarise_file
+from chat_utils import chat
 
 if __name__ == "__main__":
     if '--create-project' in sys.argv:
@@ -12,6 +13,10 @@ if __name__ == "__main__":
             build_project(desc)
         else:
             print("❌ Missing project description.")
+    
+    elif "--chat" in sys.argv:
+        chat()
+
     elif '--summarise' in sys.argv:
         idx = sys.argv.index('--summarise')
         if len(sys.argv) > idx + 2:

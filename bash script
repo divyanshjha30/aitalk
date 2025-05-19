@@ -19,6 +19,10 @@ if [[ "$1" == "--create-project" ]]; then
 elif [[ "$1" =~ --explain-[0-9]+$ ]]; then
     "$VENV_PYTHON" "$AITALK_PATH" "$1"
 
+# --chat
+elif [[ "$1" == "--chat" ]]; then
+    "$VENV_PYTHON" "$AITALK_PATH" --chat
+
 # --summarise "<prompt>" file.txt
 elif [[ "$1" == "--summarise" ]]; then
     PROMPT="$2"

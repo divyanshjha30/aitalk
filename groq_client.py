@@ -8,7 +8,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TASK_MODEL_MAP = {
     "create_project": "meta-llama/llama-4-scout-17b-16e-instruct",
     "summarize": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "explain_x": "meta-llama/llama-4-scout-17b-16e-instruct"
+    "explain_x": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "chat": "meta-llama/llama-4-scout-17b-16e-instruct"  # <-- Add this line
 }
 
 def call_groq(prompt, task_type="create_project", system_prompt="You are a helpful assistant.", model=None):
