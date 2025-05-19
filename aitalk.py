@@ -4,6 +4,7 @@ from project_builder import build_project
 from explain_utils import explain_last_n_commands_with_output
 from summarise_utils import summarise_file
 from chat_utils import chat
+from git_summary_utils import git_summary
 
 if __name__ == "__main__":
     if '--create-project' in sys.argv:
@@ -25,6 +26,8 @@ if __name__ == "__main__":
             summarise_file(prompt, file_path)
         else:
             print("❌ Usage: aitalk --summarise \"prompt\" file.txt")
+    elif '--git-summary' in sys.argv:
+        git_summary()
     else:
         explain_flag = None
         for arg in sys.argv:
@@ -40,3 +43,4 @@ if __name__ == "__main__":
             print("  aitalk --create-project \"build a react todo app\"")
             print("  aitalk --explain-5")
             print("  aitalk --summarise \"summarise this file\" file.txt")
+            print("  aitalk --git-summary")

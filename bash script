@@ -23,6 +23,10 @@ elif [[ "$1" =~ --explain-[0-9]+$ ]]; then
 elif [[ "$1" == "--chat" ]]; then
     "$VENV_PYTHON" "$AITALK_PATH" --chat
 
+# --git-summary
+elif [[ "$1" == "--git-summary" ]]; then
+    "$VENV_PYTHON" "$AITALK_PATH" --git-summary
+
 # --summarise "<prompt>" file.txt
 elif [[ "$1" == "--summarise" ]]; then
     PROMPT="$2"
@@ -45,6 +49,7 @@ elif [[ "$1" == "--help" ]]; then
     echo "Usage:"
     echo "  aitalk --create-project \"make a react app\""
     echo "  aitalk --explain-5"
+    echo "  aitalk --git-summary"
     echo "  aitalk --summarise \"summarise this file\" file.txt"
     exit 0
 
