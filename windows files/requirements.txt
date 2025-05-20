@@ -1,0 +1,5 @@
+requests
+python-dotenv
+json5
+PyMuPDF
+python-docx
