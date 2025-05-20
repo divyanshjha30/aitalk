@@ -1,7 +1,9 @@
 import requests
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
-GROQ_API_KEY = "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"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 TASK_MODEL_MAP = {
     "create_project": "meta-llama/llama-4-scout-17b-16e-instruct",
