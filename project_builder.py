@@ -10,7 +10,6 @@ import json5
 import shutil
 import time
 import threading
-import pty
 
 # --- Meta-prompt generators ---
 
@@ -26,7 +25,7 @@ Return ONLY the prompt string to use. Do NOT include markdown or explanation.
     if not prompt_string:
         print("❌ Groq API did not return a prompt string. Check your API key, model, or network.")
         sys.exit(1)
-    return prompt_string.strip().replace('“', '"').replace('”', '"')
+    return prompt_string.strip().replace('"', '"').replace('"', '"')
 
 def generate_prompt_for_file_content(description, filepath, previous_files):
     context_str = ""
@@ -340,37 +339,43 @@ Make sure the new version fixes the issue and contains required dependencies for
         run_npm_start_with_auto_confirm(base_path)
 
 def run_npm_start_with_auto_confirm(cwd):
-    print("🚀 Running npm start...")
-
-    def read_and_respond(fd):
-        sent_yes = False
-        while True:
-            try:
-                output = os.read(fd, 1024).decode(errors="ignore")
-                if not output:
+    """Windows-compatible version of npm start with auto-confirmation"""
+    try:
+        # Use subprocess.Popen instead of pty
+        process = subprocess.Popen(
+            'npm start',
+            cwd=cwd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Start a thread to monitor the output
+        def monitor_output():
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
                     break
-                print(output, end="")  # Print npm output to console
-
-                # Match the prompt more loosely
-                if (
-                    "would you like to run the app on another port" in output.lower()
-                    and not sent_yes
-                ):
-                    print("⚠️ Port 3000 is busy. Auto-confirming port change...")
-                    os.write(fd, b"Y\n")
-                    sent_yes = True
-            except OSError:
-                break
-
-    pid, fd = pty.fork()
-    if pid == 0:
-        # Child process
-        os.execvp("npm", ["npm", "start"])
-    else:
-        # Parent process
-        read_and_respond(fd)
-        os.close(fd)
-        print("✅ npm start completed.")
+                if output:
+                    print(output.strip())
+                    if "Would you like to run the app on another port instead?" in output:
+                        process.stdin.write('y\n')
+                        process.stdin.flush()
+        
+        # Start monitoring thread
+        monitor_thread = threading.Thread(target=monitor_output)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+        
+        # Wait for the process to complete
+        process.wait()
+        
+    except Exception as e:
+        print(f"Error running npm start: {e}")
+        return False
+    
+    return True
 
 # Utilities
 
