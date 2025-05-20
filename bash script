@@ -51,6 +51,8 @@ elif [[ "$1" == "--help" ]]; then
     echo "  aitalk --explain-5"
     echo "  aitalk --git-summary"
     echo "  aitalk --summarise \"summarise this file\" file.txt"
+    echo "  aitalk --chat"
+    echo "  aitalk --help"
     exit 0
 
 # Fallback

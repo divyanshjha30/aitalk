@@ -40,7 +40,8 @@ if __name__ == "__main__":
             explain_last_n_commands_with_output(explain_flag)
         else:
             print("Usage:")
-            print("  aitalk --create-project \"build a react todo app\"")
-            print("  aitalk --explain-5")
-            print("  aitalk --summarise \"summarise this file\" file.txt")
+            print("  aitalk --create-project \"project description\"")
+            print("  aitalk --explain-X                # e.g. --explain-5")
+            print("  aitalk --summarise \"prompt\" file.txt")
             print("  aitalk --git-summary")
+            print("  aitalk --chat")
